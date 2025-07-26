@@ -1,25 +1,33 @@
 import { type Session } from "next-auth";
 import { SessionProvider } from "next-auth/react";
 import { type AppType } from "next/app";
-import { Geist } from "next/font/google";
+import { type NextPage } from "next";
+import { type ReactElement, type ReactNode } from "react";
 
 import { api } from "@/utils/api";
+import { Layout } from "@/components";
 
 import "@/styles/globals.css";
 
-const geist = Geist({
-  subsets: ["latin"],
-});
+export type NextPageWithLayout<P = {}, IP = P> = NextPage<P, IP> & {
+  getLayout?: (page: ReactElement) => ReactNode;
+};
 
-const MyApp: AppType<{ session: Session | null }> = ({
+type AppPropsWithLayout = {
+  Component: NextPageWithLayout;
+  pageProps: { session: Session | null };
+};
+
+const MyApp = ({
   Component,
   pageProps: { session, ...pageProps },
-}) => {
+}: AppPropsWithLayout) => {
+  // Use the layout defined at the page level, if available
+  const getLayout = Component.getLayout ?? ((page) => <Layout>{page}</Layout>);
+
   return (
     <SessionProvider session={session}>
-      <div className={geist.className}>
-        <Component {...pageProps} />
-      </div>
+      {getLayout(<Component {...pageProps} />)}
     </SessionProvider>
   );
 };

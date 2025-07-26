@@ -1,6 +1,59 @@
 @import "tailwindcss";
 
 @theme {
+  /* Font Families */
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-display: "Inter", sans-serif;
+  --font-body: "Source Sans Pro", sans-serif;
+
+  /* Brand Colors */
+  --color-brand-yellow: #f8f674;
+  --color-brand-silver-50: #ffffff;
+  --color-brand-silver-500: #bbbbbb;
+  --color-brand-silver-900: #888888;
+
+  /* Primary Colors */
+  --color-primary-50: #f5faff;
+  --color-primary-100: #e0f0ff;
+  --color-primary-200: #bfe0ff;
+  --color-primary-300: #99d1ff;
+  --color-primary-400: #66b3ff;
+  --color-primary-500: #3396ff;
+  --color-primary-600: #007aff;
+  --color-primary-700: #0061cc;
+  --color-primary-800: #004899;
+  --color-primary-900: #003366;
+
+  /* Accent Colors */
+  --color-accent: #ff4081;
+  --color-accent-light: #ff79a1;
+  --color-accent-dark: #c60055;
+
+  /* Background Colors */
+  --color-background-light: #f9fafb;
+  --color-background-dark: #0f172a;
+
+  /* Text Colors */
+  --color-text-light: #374151;
+  --color-text-dark: #e5e7eb;
+
+  /* Custom Shadows */
+  --shadow-soft-neon: 0 4px 20px rgba(51, 150, 255, 0.5);
+  --shadow-glow-accent: 0 0 8px rgba(255, 64, 129, 0.7);
+  --shadow-brand-glow: 0 0 12px rgba(248, 246, 116, 0.6);
+
+  /* Custom Animations */
+  --animate-fade-in-up: fadeInUp 0.5s ease-out;
+
+  @keyframes fadeInUp {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }

@@ -15,6 +15,7 @@ export const postRouter = createTRPCRouter({
       };
     }),
 
+  /* Commented out - Post model doesn't exist in schema
   create: protectedProcedure
     .input(z.object({ name: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
@@ -34,6 +35,7 @@ export const postRouter = createTRPCRouter({
 
     return post ?? null;
   }),
+  */
 
   getSecretMessage: protectedProcedure.query(() => {
     return "you can now see this secret message!";

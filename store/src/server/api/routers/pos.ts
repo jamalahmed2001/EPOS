@@ -102,8 +102,13 @@ export const posRouter = createTRPCRouter({
         ),
         discount: z.number().min(0).default(0),
         discountType: z.enum(["percentage", "fixed"]).default("percentage"),
-        paymentMethod: z.enum(["cash", "card", "terminal"]),
-        amountReceived: z.number().optional(), // For cash payments
+        payments: z.array(
+          z.object({
+            method: z.enum(["cash", "card", "terminal"]),
+            amount: z.number().positive(),
+            amountReceived: z.number().optional(), // For cash payments (if more than amount)
+          })
+        ).min(1),
         promoCode: z.string().optional(),
       })
     )
@@ -224,10 +229,34 @@ export const posRouter = createTRPCRouter({
       const tax = (subtotal - totalDiscount) * 0.2; // 20% VAT
       const total = subtotal - totalDiscount + tax;
 
-      // For cash payments, calculate change
-      const change = input.paymentMethod === "cash" && input.amountReceived
-        ? input.amountReceived - total
-        : 0;
+      // Validate payments
+      const totalPaid = input.payments.reduce((sum, payment) => sum + payment.amount, 0);
+      
+      if (Math.abs(totalPaid - total) > 0.01) { // Allow for rounding differences
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Payment total (£${totalPaid.toFixed(2)}) does not match order total (£${total.toFixed(2)})`,
+        });
+      }
+
+      // Validate and calculate change for cash payments
+      const cashPayments = input.payments.filter(p => p.method === "cash");
+      
+      // Validate cash payments have amountReceived when needed
+      for (const cashPayment of cashPayments) {
+        if (!cashPayment.amountReceived || cashPayment.amountReceived < cashPayment.amount) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Cash payments must include amountReceived and it must be >= payment amount",
+          });
+        }
+      }
+      
+      const totalCashReceived = cashPayments.reduce((sum, payment) => 
+        sum + (payment.amountReceived ?? payment.amount), 0
+      );
+      const totalCashRequired = cashPayments.reduce((sum, payment) => sum + payment.amount, 0);
+      const change = totalCashReceived - totalCashRequired;
 
       // Create order
       const order = await ctx.db.order.create({
@@ -252,8 +281,11 @@ export const posRouter = createTRPCRouter({
           channel: "POS",
           promoCode: input.promoCode,
           metadata: {
-            paymentMethod: input.paymentMethod,
-            amountReceived: input.amountReceived,
+            payments: input.payments.map(payment => ({
+              method: payment.method,
+              amount: payment.amount,
+              amountReceived: payment.amountReceived,
+            })),
             change,
             posTerminal: "main",
             orderLocation: {

@@ -31,6 +31,12 @@ interface Customer {
   completedOrders: number;
 }
 
+interface Payment {
+  method: "cash" | "card" | "terminal";
+  amount: number;
+  amountReceived?: number; // For cash payments
+}
+
 const POSPage: NextPageWithLayout = () => {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -51,8 +57,7 @@ const POSPage: NextPageWithLayout = () => {
   // Transaction state
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage");
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "cash">("card");
-  const [amountReceived, setAmountReceived] = useState("");
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [promoCode, setPromoCode] = useState("");
   
   // Search state
@@ -162,9 +167,16 @@ const POSPage: NextPageWithLayout = () => {
     : Math.min(discount, subtotal);
   const tax = Math.max(0, (subtotal - orderDiscountAmount) * 0.2);
   const total = Math.max(0, subtotal - orderDiscountAmount + tax);
-  const change = paymentMethod === "cash" && amountReceived 
-    ? Math.max(0, parseFloat(amountReceived) - total)
-    : 0;
+  
+  // Payment calculations
+  const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const remainingAmount = Math.max(0, total - totalPaid);
+  const cashPayments = payments.filter(p => p.method === "cash");
+  const totalCashReceived = cashPayments.reduce((sum, payment) => 
+    sum + (payment.amountReceived ?? payment.amount), 0
+  );
+  const totalCashRequired = cashPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const change = totalCashReceived - totalCashRequired;
 
   // Handlers
   const handleAddToCart = (product: any) => {
@@ -229,7 +241,7 @@ const POSPage: NextPageWithLayout = () => {
     setDiscount(0);
     setPromoCode("");
     setSelectedCustomer(null);
-    setAmountReceived("");
+    setPayments([]);
   };
 
   const handleItemDiscount = (productId: string, itemDiscount: number, itemDiscountType: "percentage" | "fixed") => {
@@ -274,9 +286,17 @@ const POSPage: NextPageWithLayout = () => {
       return;
     }
     
-    if (paymentMethod === "cash" && (!amountReceived || parseFloat(amountReceived) < total)) {
-      alert("Please enter the amount received");
+    if (Math.abs(totalPaid - total) > 0.01) {
+      alert(`Payment total (£${totalPaid.toFixed(2)}) does not match order total (£${total.toFixed(2)})`);
       return;
+    }
+
+    // Validate cash payments
+    for (const payment of payments) {
+      if (payment.method === "cash" && (!payment.amountReceived || payment.amountReceived < payment.amount)) {
+        alert("Cash payments must include amount received and it must be >= payment amount");
+        return;
+      }
     }
     
     createOrder.mutate({
@@ -290,8 +310,7 @@ const POSPage: NextPageWithLayout = () => {
       })),
       discount,
       discountType,
-      paymentMethod,
-      amountReceived: paymentMethod === "cash" ? parseFloat(amountReceived) : undefined,
+      payments,
       promoCode: promoCode || undefined,
     });
   };
@@ -315,6 +334,35 @@ const POSPage: NextPageWithLayout = () => {
   const handleQuickDiscount = (percentage: number) => {
     setDiscount(percentage);
     setDiscountType("percentage");
+  };
+
+  // Payment handlers
+  const addPayment = (method: "cash" | "card" | "terminal", amount: number) => {
+    if (amount <= 0 || amount > remainingAmount) return;
+    
+    const newPayment: Payment = {
+      method,
+      amount,
+      ...(method === "cash" && { amountReceived: amount })
+    };
+    
+    setPayments(prev => [...prev, newPayment]);
+  };
+
+  const updatePayment = (index: number, updates: Partial<Payment>) => {
+    setPayments(prev => prev.map((payment, i) => 
+      i === index ? { ...payment, ...updates } : payment
+    ));
+  };
+
+  const removePayment = (index: number) => {
+    setPayments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const addQuickPayment = (method: "cash" | "card" | "terminal") => {
+    if (remainingAmount > 0) {
+      addPayment(method, remainingAmount);
+    }
   };
 
   if (status === "loading") {
@@ -746,50 +794,127 @@ const POSPage: NextPageWithLayout = () => {
             {/* Payment Section */}
             <div className={`p-4 flex-shrink-0 ${activeTab !== "payment" ? "hidden lg:block" : ""}`}>
               <div className="space-y-3">
-                {/* Payment Method */}
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setPaymentMethod("card")}
-                    className={`h-12 rounded-xl transition-colors flex items-center justify-center gap-2 ${
-                      paymentMethod === "card"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted hover:bg-muted/80 text-foreground"
-                    }`}
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                    Card
-              </button>
-                  <button
-                    onClick={() => setPaymentMethod("cash")}
-                    className={`h-12 rounded-xl transition-colors flex items-center justify-center gap-2 ${
-                      paymentMethod === "cash"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted hover:bg-muted/80 text-foreground"
-                    }`}
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    Cash
-              </button>
+                <div className="flex items-center justify-between">
+                  <h2 className="font-semibold text-foreground">Payments</h2>
+                  <div className="text-sm text-muted-foreground">
+                    Remaining: £{remainingAmount.toFixed(2)}
+                  </div>
                 </div>
 
-                {/* Cash Amount Input */}
-                {paymentMethod === "cash" && (
+                {/* Current Payments */}
+                {payments.length > 0 && (
                   <div className="space-y-2">
-                    <input
-                      type="number"
-                      value={amountReceived}
-                      onChange={(e) => setAmountReceived(e.target.value)}
-                      placeholder="Amount received"
-                      step="0.01"
-                      className="w-full h-12 px-4 rounded-xl border border-input bg-background text-lg text-center focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
+                    {payments.map((payment, index) => (
+                      <div key={index} className="bg-card rounded-lg p-3 border border-border">
+                        <div className="flex items-center justify-between mb-2">
+                                                     <div className="flex items-center gap-2">
+                             <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               {payment.method === "card" ? (
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                               ) : payment.method === "cash" ? (
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                               ) : (
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                               )}
+                             </svg>
+                            <span className="font-medium text-foreground capitalize">{payment.method}</span>
+                          </div>
+                          <button
+                            onClick={() => removePayment(index)}
+                            className="text-red-500 hover:text-red-700 p-1"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="block text-xs text-muted-foreground mb-1">Amount</label>
+                            <input
+                              type="number"
+                              value={payment.amount}
+                              onChange={(e) => updatePayment(index, { amount: parseFloat(e.target.value) || 0 })}
+                              step="0.01"
+                              min="0"
+                              max={payment.amount + remainingAmount}
+                              className="w-full h-8 px-2 rounded border border-input bg-background text-sm focus:border-primary focus:outline-none"
+                            />
+                          </div>
+                          
+                          {payment.method === "cash" && (
+                            <div className="flex-1">
+                              <label className="block text-xs text-muted-foreground mb-1">Received</label>
+                              <input
+                                type="number"
+                                value={payment.amountReceived || ""}
+                                onChange={(e) => updatePayment(index, { amountReceived: parseFloat(e.target.value) || 0 })}
+                                step="0.01"
+                                min={payment.amount}
+                                className="w-full h-8 px-2 rounded border border-input bg-background text-sm focus:border-primary focus:outline-none"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add Payment Buttons */}
+                {remainingAmount > 0 && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => addQuickPayment("card")}
+                        className="h-10 rounded-lg bg-muted hover:bg-muted/80 flex items-center justify-center gap-2 text-foreground transition-colors text-sm"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                        Add Card
+                      </button>
+                      <button
+                        onClick={() => addQuickPayment("cash")}
+                        className="h-10 rounded-lg bg-muted hover:bg-muted/80 flex items-center justify-center gap-2 text-foreground transition-colors text-sm"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                        Add Cash
+                      </button>
+                    </div>
+                    
+                    <button
+                      onClick={() => addQuickPayment("terminal")}
+                      className="w-full h-10 rounded-lg bg-muted hover:bg-muted/80 flex items-center justify-center gap-2 text-foreground transition-colors text-sm"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      Add Terminal Payment
+                    </button>
+                    
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-orange-600">
+                        Still need: £{remainingAmount.toFixed(2)}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Payment Summary */}
+                {payments.length > 0 && (
+                  <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>Total Paid:</span>
+                      <span>£{totalPaid.toFixed(2)}</span>
+                    </div>
                     {change > 0 && (
-                      <div className="text-center text-lg font-semibold text-green-600">
-                        Change: £{change.toFixed(2)}
+                      <div className="flex justify-between text-green-600 font-semibold">
+                        <span>Change:</span>
+                        <span>£{change.toFixed(2)}</span>
                       </div>
                     )}
                   </div>
@@ -928,16 +1053,18 @@ const POSPage: NextPageWithLayout = () => {
                     <span className="text-muted-foreground">Total</span>
                     <span className="text-foreground">£{lastOrder.total}</span>
                   </div>
-                  {paymentMethod === "cash" && change > 0 && (
+                  {lastOrder.metadata?.payments && lastOrder.metadata.payments.map((payment: any, index: number) => (
+                    <div key={index} className="flex justify-between text-sm text-green-600">
+                      <span className="capitalize">{payment.method}</span>
+                      <span>£{payment.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {lastOrder.metadata?.change > 0 && (
                     <div className="flex justify-between text-sm text-green-600">
                       <span>Change</span>
-                      <span>£{change.toFixed(2)}</span>
+                      <span>£{lastOrder.metadata.change.toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Payment Method</span>
-                    <span className="text-foreground capitalize">{paymentMethod}</span>
-                  </div>
                 </div>
 
                 <div className="flex gap-3">
@@ -997,14 +1124,22 @@ const POSPage: NextPageWithLayout = () => {
                           <span>Total:</span>
                           <span>£${lastOrder.total.toFixed(2)}</span>
                         </div>
-                        ${paymentMethod === "cash" && change > 0 ? `
+                        ${lastOrder.metadata?.payments ? lastOrder.metadata.payments.map((payment: any) => `
                           <div class="item">
-                            <span>Cash:</span>
-                            <span>£${(lastOrder.total.toNumber() + change).toFixed(2)}</span>
+                            <span class="capitalize">${payment.method}:</span>
+                            <span>£${payment.amount.toFixed(2)}</span>
                           </div>
+                          ${payment.method === "cash" && payment.amountReceived > payment.amount ? `
+                            <div class="item">
+                              <span>Cash Received:</span>
+                              <span>£${payment.amountReceived.toFixed(2)}</span>
+                            </div>
+                          ` : ""}
+                        `).join("") : ""}
+                        ${lastOrder.metadata?.change > 0 ? `
                           <div class="item">
                             <span>Change:</span>
-                            <span>£${change.toFixed(2)}</span>
+                            <span>£${lastOrder.metadata.change.toFixed(2)}</span>
                           </div>
                         ` : ""}
                         <div class="divider"></div>

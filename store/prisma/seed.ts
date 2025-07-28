@@ -4,6 +4,34 @@ import { hash } from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
+  // Clear existing data in correct order to respect foreign key constraints
+  console.log("Clearing existing data...");
+  
+  // Delete dependent records first
+  await prisma.loyaltyTransaction.deleteMany();
+  await prisma.cartItem.deleteMany();
+  await prisma.cart.deleteMany();
+  await prisma.orderItem.deleteMany();
+  await prisma.order.deleteMany();
+  await prisma.subscriptionItem.deleteMany();
+  await prisma.subscription.deleteMany();
+  await prisma.review.deleteMany();
+  await prisma.storeInventory.deleteMany();
+  await prisma.productImage.deleteMany();
+  await prisma.product.deleteMany();
+  await prisma.loyaltyAccount.deleteMany();
+  await prisma.address.deleteMany();
+  
+  // Clear manager references from stores before deleting users
+  await prisma.store.updateMany({
+    data: { managerId: null }
+  });
+  
+  await prisma.user.deleteMany();
+  await prisma.store.deleteMany();
+  await prisma.category.deleteMany();
+  console.log("Existing data cleared.");
+
   // Create categories
   const categories = await Promise.all([
     prisma.category.create({
@@ -33,73 +61,145 @@ async function main() {
   const stores = await Promise.all([
     prisma.store.create({
       data: {
-        name: "Ministry of Vapes - Central London",
-        slug: "central-london",
-        address: "123 Oxford Street",
-        city: "London",
-        postalCode: "W1D 1LL",
+        name: "Ministry of Vapes - Deepdale Preston",
+        slug: "deepdale-preston",
+        address: "19 Harewood Rd",
+        city: "Preston",
+        postalCode: "PR1 6XH",
         country: "GB",
-        phone: "+44 20 7123 4567",
-        email: "central@ministryofvapes.co.uk",
-        latitude: 51.5155,
-        longitude: -0.1413,
+        phone: "01772 446 376",
+        email: "deepdale@ministryofvapes.co.uk",
+        latitude: 53.7632,
+        longitude: -2.7031,
         status: "ACTIVE",
         operatingHours: {
-          monday: { open: "09:00", close: "21:00" },
-          tuesday: { open: "09:00", close: "21:00" },
-          wednesday: { open: "09:00", close: "21:00" },
-          thursday: { open: "09:00", close: "21:00" },
-          friday: { open: "09:00", close: "22:00" },
-          saturday: { open: "10:00", close: "22:00" },
-          sunday: { open: "11:00", close: "20:00" },
+          monday: { open: "09:00", close: "18:00" },
+          tuesday: { open: "09:00", close: "18:00" },
+          wednesday: { open: "09:00", close: "18:00" },
+          thursday: { open: "09:00", close: "18:00" },
+          friday: { open: "09:00", close: "18:00" },
+          saturday: { open: "09:00", close: "17:00" },
+          sunday: { open: "11:00", close: "16:00" },
         },
       },
     }),
     prisma.store.create({
       data: {
-        name: "Ministry of Vapes - Camden",
-        slug: "camden",
-        address: "45 Camden High Street",
-        city: "London",
-        postalCode: "NW1 7JH",
+        name: "Ministry of Vapes - Friargate Preston",
+        slug: "friargate-preston",
+        address: "178 Friargate",
+        city: "Preston",
+        postalCode: "PR1 2EJ",
         country: "GB",
-        phone: "+44 20 7485 2345",
-        email: "camden@ministryofvapes.co.uk",
-        latitude: 51.5391,
-        longitude: -0.1426,
+        phone: "01772 914 748",
+        email: "friargate@ministryofvapes.co.uk",
+        latitude: 53.7588,
+        longitude: -2.7089,
         status: "ACTIVE",
         operatingHours: {
-          monday: { open: "10:00", close: "20:00" },
-          tuesday: { open: "10:00", close: "20:00" },
-          wednesday: { open: "10:00", close: "20:00" },
-          thursday: { open: "10:00", close: "20:00" },
-          friday: { open: "10:00", close: "21:00" },
-          saturday: { open: "10:00", close: "21:00" },
-          sunday: { open: "11:00", close: "19:00" },
+          monday: { open: "09:00", close: "18:00" },
+          tuesday: { open: "09:00", close: "18:00" },
+          wednesday: { open: "09:00", close: "18:00" },
+          thursday: { open: "09:00", close: "18:00" },
+          friday: { open: "09:00", close: "18:00" },
+          saturday: { open: "09:00", close: "17:00" },
+          sunday: { open: "11:00", close: "16:00" },
         },
       },
     }),
     prisma.store.create({
       data: {
-        name: "Ministry of Vapes - Shoreditch",
-        slug: "shoreditch",
-        address: "78 Brick Lane",
-        city: "London",
-        postalCode: "E1 6RL",
+        name: "Ministry of Vapes - Leyland",
+        slug: "leyland",
+        address: "Leyland Shopping Centre",
+        city: "Leyland",
+        postalCode: "PR25 1QX",
         country: "GB",
-        phone: "+44 20 7247 8901",
-        email: "shoreditch@ministryofvapes.co.uk",
-        latitude: 51.5224,
-        longitude: -0.0724,
+        phone: "01772 621 654",
+        email: "leyland@ministryofvapes.co.uk",
+        latitude: 53.6918,
+        longitude: -2.6859,
         status: "ACTIVE",
         operatingHours: {
-          monday: { open: "11:00", close: "20:00" },
-          tuesday: { open: "11:00", close: "20:00" },
-          wednesday: { open: "11:00", close: "20:00" },
-          thursday: { open: "11:00", close: "21:00" },
-          friday: { open: "11:00", close: "22:00" },
-          saturday: { open: "11:00", close: "22:00" },
-          sunday: { open: "12:00", close: "19:00" },
+          monday: { open: "09:00", close: "18:00" },
+          tuesday: { open: "09:00", close: "18:00" },
+          wednesday: { open: "09:00", close: "18:00" },
+          thursday: { open: "09:00", close: "18:00" },
+          friday: { open: "09:00", close: "18:00" },
+          saturday: { open: "09:00", close: "17:00" },
+          sunday: { open: "11:00", close: "16:00" },
+        },
+      },
+    }),
+    prisma.store.create({
+      data: {
+        name: "Ministry of Vapes - Darwen",
+        slug: "darwen",
+        address: "Darwen Town Centre",
+        city: "Darwen",
+        postalCode: "BB3 1AS",
+        country: "GB",
+        phone: "01254 846 733",
+        email: "darwen@ministryofvapes.co.uk",
+        latitude: 53.6978,
+        longitude: -2.4622,
+        status: "ACTIVE",
+        operatingHours: {
+          monday: { open: "09:00", close: "18:00" },
+          tuesday: { open: "09:00", close: "18:00" },
+          wednesday: { open: "09:00", close: "18:00" },
+          thursday: { open: "09:00", close: "18:00" },
+          friday: { open: "09:00", close: "18:00" },
+          saturday: { open: "09:00", close: "17:00" },
+          sunday: { open: "11:00", close: "16:00" },
+        },
+      },
+    }),
+    prisma.store.create({
+      data: {
+        name: "Ministry of Vapes - Lancaster",
+        slug: "lancaster",
+        address: "Lancaster City Centre",
+        city: "Lancaster",
+        postalCode: "LA1 1HT",
+        country: "GB",
+        phone: "07793 976 548",
+        email: "lancaster@ministryofvapes.co.uk",
+        latitude: 54.0465,
+        longitude: -2.8007,
+        status: "ACTIVE",
+        operatingHours: {
+          monday: { open: "09:00", close: "18:00" },
+          tuesday: { open: "09:00", close: "18:00" },
+          wednesday: { open: "09:00", close: "18:00" },
+          thursday: { open: "09:00", close: "18:00" },
+          friday: { open: "09:00", close: "18:00" },
+          saturday: { open: "09:00", close: "17:00" },
+          sunday: { open: "11:00", close: "16:00" },
+        },
+      },
+    }),
+    prisma.store.create({
+      data: {
+        name: "Ministry of Vapes - Burnley",
+        slug: "burnley",
+        address: "Burnley Town Centre",
+        city: "Burnley",
+        postalCode: "BB11 1LD",
+        country: "GB",
+        phone: "07949 328 153",
+        email: "burnley@ministryofvapes.co.uk",
+        latitude: 53.7895,
+        longitude: -2.2482,
+        status: "ACTIVE",
+        operatingHours: {
+          monday: { open: "09:00", close: "18:00" },
+          tuesday: { open: "09:00", close: "18:00" },
+          wednesday: { open: "09:00", close: "18:00" },
+          thursday: { open: "09:00", close: "18:00" },
+          friday: { open: "09:00", close: "18:00" },
+          saturday: { open: "09:00", close: "17:00" },
+          sunday: { open: "11:00", close: "16:00" },
         },
       },
     }),
@@ -134,7 +234,7 @@ async function main() {
       name: "Sarah Johnson",
       role: "MANAGER",
       emailVerified: new Date(),
-      workingStoreId: stores[0]!.id, // Central London store
+      workingStoreId: stores[0]!.id, // Deepdale Preston store
       referralCode: "MANAGER001",
       loyaltyAccount: {
         create: {
@@ -161,7 +261,7 @@ async function main() {
       name: "John Smith",
       role: "STAFF",
       emailVerified: new Date(),
-      workingStoreId: stores[0]!.id, // Central London store
+      workingStoreId: stores[0]!.id, // Deepdale Preston store
       referralCode: "STAFF001",
       loyaltyAccount: {
         create: {
@@ -194,36 +294,108 @@ async function main() {
     },
   });
 
-  // Create some products
-  const products = await Promise.all([
-    prisma.product.create({
-      data: {
-        name: "Blue Razz E-Liquid",
-        slug: "blue-razz-e-liquid",
-        description: "A refreshing blue raspberry flavored e-liquid with a perfect balance of sweet and tart. Made with high-quality ingredients for a smooth vaping experience.",
-        shortDescription: "Sweet and tart blue raspberry flavor",
-        sku: "EL-BR-001",
-        barcode: "1234567890123",
-        price: 14.99,
-        compareAtPrice: 19.99,
-        stock: 100,
-        categoryId: categories[0]!.id,
-        featured: true,
-        isSubscribable: true,
-        subscriptionPrice: 12.99,
-        metaTitle: "Blue Razz E-Liquid - Premium Vape Juice",
-        metaDescription: "Experience the perfect blend of sweet and tart with our Blue Razz e-liquid. Premium quality vape juice available at Ministry of Vapes.",
-        images: {
-          create: [
-            {
-              url: "https://images.unsplash.com/photo-1527661591475-527312dd65f5?w=500",
-              alt: "Blue Razz E-Liquid",
-              position: 0,
+  // Create Ministry of Vapes e-liquid flavours in 10mg and 20mg
+  const flavours = [
+    "Vimto",
+    "Blueberry Cherry Cranberry",
+    "Jelly Bear",
+    "Blueberry Sour Raspberry",
+    "Mr Blue",
+    "Strawberry Raspberry Cherry Ice",
+    "Lemon Lime",
+    "Skittles",
+    "Fizzy Cherry",
+    "Fresh Mint",
+    "Peach Mango Guava",
+    "Blueberry Cotton Candy",
+    "Blueberry Pomegranate",
+    "Strawberry Kiwi",
+    "Blue Razz Lemonade",
+    "Strawberry Watermelon Bubblegum",
+    "Triple Mango",
+    "Pink Lemonade",
+    "Cola Ice",
+    "Watermelon Ice",
+    "Red Apple Ice",
+    "Blueberry Peach Orange",
+    "Pineapple Ice",
+    "Blueberry Ice",
+    "Grape",
+    "Sour Apple",
+    "Blackcurrant Menthol",
+    "Triple Melon",
+    "Apple Pear Kiwi",
+    "Aloe Grape",
+    "Banana Ice",
+    "Strawberry Grapefruit Lime",
+    "Cherry Cola",
+    "Grapefruit Orange Lemon",
+    "Kiwi Passionfruit Guava",
+    "Strawberry Ice Cream",
+    "Sweet Ice Menthol",
+  ];
+
+  const nicotineStrengths = [10, 20];
+  
+  const createSlug = (name: string, mg: number) => {
+    return `${name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-${mg}mg`;
+  };
+
+  const createSku = (name: string, mg: number, index: number) => {
+    const prefix = name.split(' ').map(word => word.charAt(0).toUpperCase()).join('').substring(0, 3);
+    return `MOV-${prefix}-${mg}MG-${String(index).padStart(3, '0')}`;
+  };
+
+  const generateBarcode = (index: number) => {
+    return `7777777${String(index).padStart(6, '0')}`;
+  };
+
+  const eLiquidProducts = [];
+  let productIndex = 1;
+
+  for (const flavour of flavours) {
+    for (const mg of nicotineStrengths) {
+      const productName = `Ministry of Vapes ${flavour} ${mg}mg`;
+      const slug = createSlug(flavour, mg);
+      const sku = createSku(flavour, mg, productIndex);
+      const barcode = generateBarcode(productIndex);
+      
+      eLiquidProducts.push(
+        prisma.product.create({
+          data: {
+            name: productName,
+            slug: slug,
+            description: `Premium ${flavour} flavored e-liquid with ${mg}mg nicotine strength. Crafted with high-quality ingredients for a smooth and satisfying vaping experience. Ministry of Vapes signature blend.`,
+            shortDescription: `${flavour} flavor - ${mg}mg nicotine`,
+            sku: sku,
+            barcode: barcode,
+            price: 14.99,
+            compareAtPrice: 19.99,
+            stock: Math.floor(Math.random() * 80) + 20, // Random stock between 20-100
+            categoryId: categories[0]!.id, // E-Liquids category
+            featured: productIndex <= 10, // First 10 products are featured
+            isSubscribable: true,
+            subscriptionPrice: 12.99,
+            metaTitle: `${productName} - Premium Vape Juice`,
+            metaDescription: `Experience the exceptional ${flavour} flavor in ${mg}mg nicotine strength. Premium quality e-liquid from Ministry of Vapes.`,
+            images: {
+              create: [
+                {
+                  url: "https://images.unsplash.com/photo-1527661591475-527312dd65f5?w=500",
+                  alt: productName,
+                  position: 0,
+                },
+              ],
             },
-          ],
-        },
-      },
-    }),
+          },
+        })
+      );
+      productIndex++;
+    }
+  }
+
+  // Create some additional non-e-liquid products
+  const additionalProducts = [
     prisma.product.create({
       data: {
         name: "Starter Vape Kit",
@@ -274,7 +446,10 @@ async function main() {
         },
       },
     }),
-  ]);
+  ];
+
+  // Create all products
+  const products = await Promise.all([...eLiquidProducts, ...additionalProducts]);
 
   // Create store inventory for each product in each store
   for (const store of stores) {
@@ -294,7 +469,8 @@ async function main() {
   console.log(`Manager user created with email: manager@ministryofvapes.com and password: manager123`);
   console.log(`Staff user created with email: staff@ministryofvapes.com and password: staff123`);
   console.log(`Customer user created with email: customer@example.com and password: customer123`);
-  console.log(`${stores.length} stores created with inventory`);
+  console.log(`${stores.length} Lancashire stores created with inventory:`);
+  console.log("- Deepdale Preston, Friargate Preston, Leyland, Darwen, Lancaster, Burnley");
   console.log("All users have been created with loyalty accounts!");
 }
 

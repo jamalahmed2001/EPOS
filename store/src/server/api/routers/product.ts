@@ -10,25 +10,67 @@ export const productRouter = createTRPCRouter({
         categoryId: z.string().optional(),
         search: z.string().optional(),
         featured: z.boolean().optional(),
+        minPrice: z.number().optional(),
+        maxPrice: z.number().optional(),
+        inStockOnly: z.boolean().optional(),
+        sortBy: z.enum(["newest", "price-low", "price-high", "name", "featured"]).default("newest"),
         limit: z.number().min(1).max(100).default(20),
         cursor: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const { categoryId, search, featured, limit, cursor } = input;
+      const { categoryId, search, featured, minPrice, maxPrice, inStockOnly, sortBy, limit, cursor } = input;
+
+      // Build where clause
+      const where: any = {
+        active: true,
+        ...(categoryId && { categoryId }),
+        ...(featured !== undefined && { featured }),
+        ...(inStockOnly && { stock: { gt: 0 } }),
+        ...(search && {
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { description: { contains: search, mode: "insensitive" } },
+            { shortDescription: { contains: search, mode: "insensitive" } },
+            { sku: { contains: search, mode: "insensitive" } },
+          ],
+        }),
+      };
+
+      // Add price range filter
+      if (minPrice !== undefined || maxPrice !== undefined) {
+        where.price = {};
+        if (minPrice !== undefined) {
+          where.price.gte = minPrice;
+        }
+        if (maxPrice !== undefined) {
+          where.price.lte = maxPrice;
+        }
+      }
+
+      // Build order by clause
+      let orderBy: any;
+      switch (sortBy) {
+        case "price-low":
+          orderBy = { price: "asc" };
+          break;
+        case "price-high":
+          orderBy = { price: "desc" };
+          break;
+        case "name":
+          orderBy = { name: "asc" };
+          break;
+        case "featured":
+          orderBy = [{ featured: "desc" }, { createdAt: "desc" }];
+          break;
+        case "newest":
+        default:
+          orderBy = { createdAt: "desc" };
+          break;
+      }
 
       const products = await ctx.db.product.findMany({
-        where: {
-          active: true,
-          ...(categoryId && { categoryId }),
-          ...(featured !== undefined && { featured }),
-          ...(search && {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { description: { contains: search, mode: "insensitive" } },
-            ],
-          }),
-        },
+        where,
         include: {
           category: true,
           images: {
@@ -40,7 +82,7 @@ export const productRouter = createTRPCRouter({
           cursor: { id: cursor },
           skip: 1,
         }),
-        orderBy: { createdAt: "desc" },
+        orderBy,
       });
 
       let nextCursor: typeof cursor | undefined = undefined;
@@ -111,17 +153,107 @@ export const productRouter = createTRPCRouter({
       };
     }),
 
+  // Get featured products
+  getFeatured: publicProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(20).default(8),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const products = await ctx.db.product.findMany({
+        where: {
+          active: true,
+          featured: true,
+          stock: { gt: 0 },
+        },
+        include: {
+          category: true,
+          images: {
+            orderBy: { position: "asc" },
+          },
+        },
+        take: input.limit,
+        orderBy: { createdAt: "desc" },
+      });
+
+      return products.map(product => ({
+        ...product,
+        price: Number(product.price),
+        compareAtPrice: product.compareAtPrice?.toNumber() ?? null,
+        subscriptionPrice: product.subscriptionPrice?.toNumber() ?? null,
+        cost: product.cost?.toNumber() ?? null,
+      }));
+    }),
+
+  // Get price range for filtering
+  getPriceRange: publicProcedure.query(async ({ ctx }) => {
+    const result = await ctx.db.product.aggregate({
+      where: { active: true },
+      _min: { price: true },
+      _max: { price: true },
+    });
+
+    return {
+      min: result._min.price ? Number(result._min.price) : 0,
+      max: result._max.price ? Number(result._max.price) : 100,
+    };
+  }),
+
   // Get categories
   getCategories: publicProcedure.query(async ({ ctx }) => {
     return ctx.db.category.findMany({
       include: {
         _count: {
-          select: { products: true },
+          select: { 
+            products: {
+              where: { active: true }
+            }
+          },
         },
       },
       orderBy: { name: "asc" },
     });
   }),
+
+  // Search products (for autocomplete)
+  search: publicProcedure
+    .input(
+      z.object({
+        query: z.string().min(1),
+        limit: z.number().min(1).max(10).default(5),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const products = await ctx.db.product.findMany({
+        where: {
+          active: true,
+          OR: [
+            { name: { contains: input.query, mode: "insensitive" } },
+            { description: { contains: input.query, mode: "insensitive" } },
+            { sku: { contains: input.query, mode: "insensitive" } },
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          price: true,
+          images: {
+            select: { url: true, alt: true },
+            take: 1,
+            orderBy: { position: "asc" },
+          },
+        },
+        take: input.limit,
+        orderBy: { createdAt: "desc" },
+      });
+
+      return products.map(product => ({
+        ...product,
+        price: Number(product.price),
+      }));
+    }),
 
   // Create a product (admin only)
   create: protectedProcedure
@@ -143,6 +275,8 @@ export const productRouter = createTRPCRouter({
         featured: z.boolean().default(false),
         isSubscribable: z.boolean().default(false),
         subscriptionPrice: z.number().positive().optional(),
+        metaTitle: z.string().optional(),
+        metaDescription: z.string().optional(),
         images: z.array(
           z.object({
             url: z.string().url(),
